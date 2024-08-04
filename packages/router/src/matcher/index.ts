@@ -17,7 +17,7 @@ import type {
 
 import { warn } from '../warning'
 import { assign, noop } from '../utils'
-import type { RouteRecordName, RouteRecordNameGeneric, _RouteRecordProps } from '../typed-routes'
+import type { RouteRecordName, _RouteRecordProps } from '../typed-routes'
 
 /**
  * Internal RouterMatcher
@@ -26,13 +26,13 @@ import type { RouteRecordName, RouteRecordNameGeneric, _RouteRecordProps } from 
  */
 export interface RouterMatcher {
   addRoute: (record: RouteRecordRaw, parent?: RouteRecordMatcher) => () => void
-  removeRoute(matcher: RouteRecordMatcher): void
-  removeRoute(name: NonNullable<RouteRecordNameGeneric>): void
+  removeRoute: {
+    (matcher: RouteRecordMatcher): void
+    (name: RouteRecordName): void
+  }
   clearRoutes: () => void
   getRoutes: () => RouteRecordMatcher[]
-  getRecordMatcher: (
-    name: NonNullable<RouteRecordNameGeneric>
-  ) => RouteRecordMatcher | undefined
+  getRecordMatcher: (name: RouteRecordName) => RouteRecordMatcher | undefined
 
   /**
    * Resolves a location. Gives access to the route record that corresponds to the actual path as well as filling the corresponding params objects
@@ -65,7 +65,7 @@ export function createRouterMatcher(
     globalOptions
   )
 
-  function getRecordMatcher(name: NonNullable<RouteRecordNameGeneric>) {
+  function getRecordMatcher(name: RouteRecordName) {
     return matcherMap.get(name)
   }
 
@@ -157,12 +157,6 @@ export function createRouterMatcher(
           removeRoute(record.name)
       }
 
-      // Avoid adding a record that doesn't display anything. This allows passing through records without a component to
-      // not be reached and pass through the catch all route
-      if (isMatchable(matcher)) {
-        insertMatcher(matcher)
-      }
-
       if (mainNormalizedRecord.children) {
         const children = mainNormalizedRecord.children
         for (let i = 0; i < children.length; i++) {
@@ -182,6 +176,17 @@ export function createRouterMatcher(
       // if (parent && isAliasRecord(originalRecord)) {
       //   parent.children.push(originalRecord)
       // }
+
+      // Avoid adding a record that doesn't display anything. This allows passing through records without a component to
+      // not be reached and pass through the catch all route
+      if (
+        (matcher.record.components &&
+          Object.keys(matcher.record.components).length) ||
+        matcher.record.name ||
+        matcher.record.redirect
+      ) {
+        insertMatcher(matcher)
+      }
     }
 
     return originalMatcher
@@ -192,9 +197,7 @@ export function createRouterMatcher(
       : noop
   }
 
-  function removeRoute(
-    matcherRef: NonNullable<RouteRecordNameGeneric> | RouteRecordMatcher
-  ) {
+  function removeRoute(matcherRef: RouteRecordName | RouteRecordMatcher) {
     if (isRouteName(matcherRef)) {
       const matcher = matcherMap.get(matcherRef)
       if (matcher) {
@@ -337,7 +340,6 @@ export function createRouterMatcher(
   routes.forEach(route => addRoute(route))
 
   function clearRoutes() {
-    matchers.length = 0
     matcherMap.clear()
   }
 
