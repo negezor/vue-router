@@ -1,5 +1,7 @@
 # 关于中文翻译
 
+<RuleKitLink />
+
 这里是 Vue Router 文档的中文翻译，该翻译由 Vue 社区贡献完成，如对翻译有任何疑问，可在我们的 GitHub 仓库创建 issue 或 pull request。谢谢。
 
 ## 协作指南
@@ -29,8 +31,8 @@ https://github.com/vuejs-translations/docs-zh-cn/wiki/%E7%BF%BB%E8%AF%91%E9%A1%B
 | active (link) | 匹配当前路由 (的链接) |
 | exact active (link) | 严格匹配当前路由 (的链接) |
 | location | 地址 |
-| (nagivate) from | (导航) 离开 |
-| (nagivate) to | (导航) 进入 |
+| (navigate) from | (导航) 离开 |
+| (navigate) to | (导航) 进入 |
 | (navigation) guard | (导航) 守卫 |
 | path | 路径 |
 

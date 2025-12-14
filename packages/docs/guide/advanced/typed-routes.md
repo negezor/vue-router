@@ -1,8 +1,6 @@
 # Typed Routes <Badge type="tip" text="v4.4.0+" />
 
-::: danger
-‼️ Experimental feature
-:::
+<RuleKitLink />
 
 ![RouterLink to autocomplete](https://user-images.githubusercontent.com/664177/176442066-c4e7fa31-4f06-4690-a49f-ed0fd880dfca.png)
 
@@ -24,30 +22,43 @@ export interface RouteNamedMap {
     'home',
     // this is the path, it will appear in autocompletion
     '/',
-    // these are the raw params. In this case, there are no params allowed
+    // these are the raw params (what can be passed to router.push() and RouterLink's "to" prop)
+    // In this case, there are no params allowed
     Record<never, never>,
-    // these are the normalized params
-    Record<never, never>
+    // these are the normalized params (what you get from useRoute())
+    Record<never, never>,
+    // this is a union of all children route names, in this case, there are none
+    never
   >
-  // repeat for each route..
+  // repeat for each route...
   // Note you can name them whatever you want
   'named-param': RouteRecordInfo<
     'named-param',
     '/:name',
-    { name: string | number }, // raw value
-    { name: string } // normalized value
+    { name: string | number }, // Allows string or number
+    { name: string }, // but always returns a string from the URL
+    'named-param-edit'
+  >
+  'named-param-edit': RouteRecordInfo<
+    'named-param-edit',
+    '/:name/edit',
+    { name: string | number }, // we also include parent params
+    { name: string },
+    never
   >
   'article-details': RouteRecordInfo<
     'article-details',
     '/articles/:id+',
     { id: Array<number | string> },
-    { id: string[] }
+    { id: string[] },
+    never
   >
   'not-found': RouteRecordInfo<
     'not-found',
     '/:path(.*)',
     { path: string },
-    { path: string }
+    { path: string },
+    never
   >
 }
 

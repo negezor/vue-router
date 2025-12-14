@@ -54,9 +54,7 @@ const routes = [
     path: '/users/:id/posts',
     redirect: to => {
       // 该函数接收目标路由作为参数
-      // 相对位置不以`/`开头
-      // 或 { path: 'profile'}
-      return 'profile'
+      return to.path.replace(/posts$/, 'profile')
     },
   },
 ]
@@ -111,3 +109,5 @@ const routes = [
 ```
 
 **关于 SEO 的注意事项**: 使用别名时，一定要[定义规范链接](https://support.google.com/webmasters/answer/139066?hl=en).
+
+<RuleKitLink />

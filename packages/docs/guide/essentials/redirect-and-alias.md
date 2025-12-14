@@ -54,9 +54,7 @@ const routes = [
     path: '/users/:id/posts',
     redirect: to => {
       // the function receives the target route as the argument
-      // a relative location doesn't start with `/`
-      // or { path: 'profile'}
-      return 'profile'
+      return to.path.replace(/posts$/, 'profile')
     },
   },
 ]
@@ -111,3 +109,5 @@ const routes = [
 ```
 
 **Note about SEO**: when using aliases, make sure to [define canonical links](https://support.google.com/webmasters/answer/139066?hl=en).
+
+<RuleKitLink />

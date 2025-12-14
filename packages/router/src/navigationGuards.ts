@@ -1,9 +1,4 @@
-import {
-  isRouteLocation,
-  Lazy,
-  RouteComponent,
-  RawRouteComponent,
-} from './types'
+import { isRouteLocation, Lazy, RouteComponent } from './types'
 
 import type {
   RouteLocationNormalized,
@@ -25,8 +20,9 @@ import { ComponentOptions, onUnmounted, onActivated, onDeactivated } from 'vue'
 import { inject, getCurrentInstance } from 'vue'
 import { matchedRouteKey } from './injectionSymbols'
 import { RouteRecordNormalized } from './matcher/types'
-import { isESModule } from './utils'
+import { isESModule, isRouteComponent } from './utils'
 import { warn } from './warning'
+import { isSameRouteRecord } from './location'
 
 function registerGuard(
   record: RouteRecordNormalized,
@@ -245,7 +241,13 @@ export function extractComponentsGuards(
   const guards: Array<() => Promise<void>> = []
 
   for (const record of matched) {
-    if (__DEV__ && !record.components && !record.children.length) {
+    if (
+      __DEV__ &&
+      !record.components &&
+      // in the new records, there is no children, only parents
+      record.children &&
+      !record.children.length
+    ) {
       warn(
         `Record with path "${record.path}" is either missing a "component(s)"` +
           ` or "children" property.`
@@ -293,6 +295,7 @@ export function extractComponentsGuards(
         }
       }
 
+      // TODO: extract the logic relying on instances into an options-api plugin
       // skip update and leave guards if the route component is not mounted
       if (guardType !== 'beforeRouteEnter' && !record.instances[name]) continue
 
@@ -321,14 +324,14 @@ export function extractComponentsGuards(
         guards.push(() =>
           componentPromise.then(resolved => {
             if (!resolved)
-              return Promise.reject(
-                new Error(
-                  `Couldn't resolve component "${name}" at "${record.path}"`
-                )
+              throw new Error(
+                `Couldn't resolve component "${name}" at "${record.path}"`
               )
             const resolvedComponent = isESModule(resolved)
               ? resolved.default
               : resolved
+            // keep the resolved module for plugins like data loaders
+            record.mods[name] = resolved
             // replace the function with the resolved component
             // cannot be null or undefined because we went into the for loop
             record.components![name] = resolvedComponent
@@ -336,6 +339,7 @@ export function extractComponentsGuards(
             const options: ComponentOptions =
               (resolvedComponent as any).__vccOpts || resolvedComponent
             const guard = options[guardType]
+
             return (
               guard &&
               guardToPromiseFn(guard, to, from, record, name, runWithContext)()
@@ -347,23 +351,6 @@ export function extractComponentsGuards(
   }
 
   return guards
-}
-
-/**
- * Allows differentiating lazy components from functional components and vue-class-component
- * @internal
- *
- * @param component
- */
-export function isRouteComponent(
-  component: RawRouteComponent
-): component is RouteComponent {
-  return (
-    typeof component === 'object' ||
-    'displayName' in component ||
-    'props' in component ||
-    '__vccOpts' in component
-  )
 }
 
 /**
@@ -381,33 +368,80 @@ export function loadRouteLocation(
           record =>
             record.components &&
             Promise.all(
-              Object.keys(record.components).reduce((promises, name) => {
-                const rawComponent = record.components![name]
-                if (
-                  typeof rawComponent === 'function' &&
-                  !('displayName' in rawComponent)
-                ) {
-                  promises.push(
-                    (rawComponent as Lazy<RouteComponent>)().then(resolved => {
-                      if (!resolved)
-                        return Promise.reject(
-                          new Error(
-                            `Couldn't resolve component "${name}" at "${record.path}". Ensure you passed a function that returns a promise.`
-                          )
-                        )
-                      const resolvedComponent = isESModule(resolved)
-                        ? resolved.default
-                        : resolved
-                      // replace the function with the resolved component
-                      // cannot be null or undefined because we went into the for loop
-                      record.components![name] = resolvedComponent
-                      return
-                    })
-                  )
-                }
-                return promises
-              }, [] as Array<Promise<RouteComponent | null | undefined>>)
+              Object.keys(record.components).reduce(
+                (promises, name) => {
+                  const rawComponent = record.components![name]
+                  if (
+                    typeof rawComponent === 'function' &&
+                    !('displayName' in rawComponent)
+                  ) {
+                    promises.push(
+                      (rawComponent as Lazy<RouteComponent>)().then(
+                        resolved => {
+                          if (!resolved)
+                            return Promise.reject(
+                              new Error(
+                                `Couldn't resolve component "${name}" at "${record.path}". Ensure you passed a function that returns a promise.`
+                              )
+                            )
+
+                          const resolvedComponent = isESModule(resolved)
+                            ? resolved.default
+                            : resolved
+                          // keep the resolved module for plugins like data loaders
+                          record.mods[name] = resolved
+                          // replace the function with the resolved component
+                          // cannot be null or undefined because we went into the for loop
+                          record.components![name] = resolvedComponent
+                          return
+                        }
+                      )
+                    )
+                  }
+                  return promises
+                },
+                [] as Array<Promise<RouteComponent | null | undefined>>
+              )
             )
         )
       ).then(() => route as RouteLocationNormalizedLoaded)
+}
+
+/**
+ * Split the leaving, updating, and entering records.
+ * @internal
+ *
+ * @param  to - Location we are navigating to
+ * @param from - Location we are navigating from
+ */
+export function extractChangingRecords(
+  to: RouteLocationNormalized,
+  from: RouteLocationNormalizedLoaded
+): [
+  leavingRecords: RouteRecordNormalized[],
+  updatingRecords: RouteRecordNormalized[],
+  enteringRecords: RouteRecordNormalized[],
+] {
+  const leavingRecords: RouteRecordNormalized[] = []
+  const updatingRecords: RouteRecordNormalized[] = []
+  const enteringRecords: RouteRecordNormalized[] = []
+
+  const len = Math.max(from.matched.length, to.matched.length)
+  for (let i = 0; i < len; i++) {
+    const recordFrom = from.matched[i]
+    if (recordFrom) {
+      if (to.matched.find(record => isSameRouteRecord(record, recordFrom)))
+        updatingRecords.push(recordFrom)
+      else leavingRecords.push(recordFrom)
+    }
+    const recordTo = to.matched[i]
+    if (recordTo) {
+      // the type doesn't matter because we are comparing per reference
+      if (!from.matched.find(record => isSameRouteRecord(record, recordTo))) {
+        enteringRecords.push(recordTo)
+      }
+    }
+  }
+
+  return [leavingRecords, updatingRecords, enteringRecords]
 }

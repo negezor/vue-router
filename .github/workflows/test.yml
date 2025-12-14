@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
@@ -28,7 +28,7 @@ jobs:
       - name: 'BrowserStack Env Setup'
         uses: 'browserstack/github-actions/setup-env@master'
         # forks do not have access to secrets so just skip this
-        if: ${{ !github.event.pull_request.head.repo.fork }}
+        if: ${{ github.repository == 'vuejs/router' && !github.event.pull_request.head.repo.fork }}
         with:
           username: ${{ secrets.BROWSERSTACK_USERNAME }}
           access-key: ${{ secrets.BROWSERSTACK_ACCESS_KEY }}
@@ -36,7 +36,6 @@ jobs:
       - run: pnpm install
       - run: pnpm run lint
       - run: pnpm run -r build
-      - run: pnpm run -r build:dts
       - run: pnpm run -r test:types
       - run: pnpm run -r test:unit
 

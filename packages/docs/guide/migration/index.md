@@ -1,5 +1,7 @@
 # Migrating from Vue 2
 
+<RuleKitLink />
+
 Most of Vue Router API has remained unchanged during its rewrite from v3 (for Vue 2) to v4 (for Vue 3) but there are still a few breaking changes that you might encounter while migrating your application. This guide is here to help you understand why these changes happened and how to adapt your application to make it work with Vue Router 4.
 
 ## Breaking Changes
@@ -442,6 +444,12 @@ Given any [normalized route location](/api/#RouteLocationNormalized):
 - The slash character (`/`) is now properly decoded inside `params` while still producing an encoded version on the URL: `%2F`.
 
 **Reason**: This allows to easily copy existing properties of a location when calling `router.push()` and `router.resolve()`, and make the resulting route location consistent across browsers. `router.push()` is now idempotent, meaning that calling `router.push(route.fullPath)`, `router.push({ hash: route.hash })`, `router.push({ query: route.query })`, and `router.push({ params: route.params })` will not create extra encoding.
+
+### `$router.push()` and `$router.replace()` - `onComplete` and `onAbort` callbacks
+
+Previously, `$router.push()` and `$router.replace()` accepted two callbacks, `onComplete` and `onAbort`, as second and third arguments. They were called after a navigation based on the result. With the introduction of a Promise based API, these callbacks are redundant and have been removed. See [Navigation Failures](/guide/advanced/navigation-failures.md) for more information on how to detect successful and failed navigations.
+
+**Reason**: Reduce library size by adapting to established JS standards (Promises).
 
 ### TypeScript changes
 

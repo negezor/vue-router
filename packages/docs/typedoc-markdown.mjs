@@ -1,19 +1,19 @@
 // @ts-check
 import fs from 'node:fs/promises'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { Application, TSConfigReader, PageEvent } from 'typedoc'
 
-const __dirname = path.dirname(new URL(import.meta.url).pathname)
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
+/** @satisfies {Partial<import('typedoc').TypeDocOptions & import('typedoc-plugin-markdown').PluginOptions>} */
 const DEFAULT_OPTIONS = {
-  // disableOutputCheck: true,
   cleanOutputDir: true,
   excludeInternal: false,
   readme: 'none',
   out: path.resolve(__dirname, './api'),
-  entryDocument: 'index.md',
+  entryFileName: 'index.md',
   hideBreadcrumbs: false,
-  hideInPageTOC: true,
   preserveAnchorCasing: true,
 }
 
@@ -72,7 +72,7 @@ export async function createTypeDocApp(config = {}) {
     if (project) {
       // Rendered docs
       try {
-        await app.generateDocs(project, options.out)
+        await app.generateOutputs(project)
         app.logger.info(`generated at ${options.out}.`)
       } catch (error) {
         app.logger.error(error)
@@ -88,6 +88,12 @@ export async function createTypeDocApp(config = {}) {
   }
 }
 
+/**
+ * checks if a path exists
+ *
+ * @async
+ * @param {string} path
+ */
 async function exists(path) {
   try {
     await fs.access(path)

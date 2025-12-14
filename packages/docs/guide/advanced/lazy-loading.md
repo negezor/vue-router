@@ -27,6 +27,8 @@ const router = createRouter({
 
 The `component` (and `components`) option accepts a function that returns a Promise of a component and Vue Router **will only fetch it when entering the page for the first time**, then use the cached version. Which means you can also have more complex functions as long as they return a Promise:
 
+<RuleKitLink />
+
 ```js
 const UserDetails = () =>
   Promise.resolve({
@@ -63,10 +65,9 @@ webpack will group any async module with the same chunk name into the same async
 
 ### With Vite
 
-In Vite you can define the chunks under the [`rollupOptions`](https://vitejs.dev/config/#build-rollupoptions):
+In Vite you can define the chunks under the [`rollupOptions`](https://vite.dev/config/build-options.html#build-rollupoptions):
 
-```js
-// vite.config.js
+```js [vite.config.js]
 export default defineConfig({
   build: {
     rollupOptions: {

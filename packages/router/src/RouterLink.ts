@@ -1,22 +1,22 @@
 import {
   defineComponent,
   h,
-  PropType,
+  type PropType,
   inject,
   computed,
   reactive,
   unref,
-  VNode,
-  UnwrapRef,
-  VNodeProps,
-  AllowedComponentProps,
-  ComponentCustomProps,
+  type VNode,
+  type UnwrapRef,
+  type VNodeProps,
+  type AllowedComponentProps,
+  type ComponentCustomProps,
   getCurrentInstance,
   watchEffect,
   // this is a workaround for https://github.com/microsoft/rushstack/issues/1050
   // this file is meant to be prepended to the generated dist/src/RouterLink.d.ts
   // @ts-ignore
-  ComputedRef,
+  type ComputedRef,
   // @ts-ignore
   DefineComponent,
   // @ts-ignore
@@ -25,7 +25,8 @@ import {
   RendererNode,
   // @ts-ignore
   ComponentOptionsMixin,
-  MaybeRef,
+  type MaybeRef,
+  type AnchorHTMLAttributes,
 } from 'vue'
 import { isSameRouteLocationParams, isSameRouteRecord } from './location'
 import { routerKey, routeLocationKey } from './injectionSymbols'
@@ -83,6 +84,11 @@ export interface RouterLinkProps extends RouterLinkOptions {
     | 'time'
     | 'true'
     | 'false'
+
+  /**
+   * Pass the returned promise of `router.push()` to `document.startViewTransition()` if supported.
+   */
+  viewTransition?: boolean
 }
 
 /**
@@ -106,7 +112,13 @@ export interface UseLinkOptions<Name extends keyof RouteMap = keyof RouteMap> {
     | RouteLocationAsPath
     | RouteLocationRaw
   >
+
   replace?: MaybeRef<boolean | undefined>
+
+  /**
+   * Pass the returned promise of `router.push()` to `document.startViewTransition()` if supported.
+   */
+  viewTransition?: boolean
 }
 
 /**
@@ -214,10 +226,18 @@ export function useLink<Name extends keyof RouteMap = keyof RouteMap>(
     e: MouseEvent = {} as MouseEvent
   ): Promise<void | NavigationFailure> {
     if (guardEvent(e)) {
-      return router[unref(props.replace) ? 'replace' : 'push'](
+      const p = router[unref(props.replace) ? 'replace' : 'push'](
         unref(props.to)
         // avoid uncaught errors are they are logged anyway
       ).catch(noop)
+      if (
+        props.viewTransition &&
+        typeof document !== 'undefined' &&
+        'startViewTransition' in document
+      ) {
+        document.startViewTransition(() => p)
+      }
+      return p
     }
     return Promise.resolve()
   }
@@ -263,6 +283,10 @@ export function useLink<Name extends keyof RouteMap = keyof RouteMap>(
   }
 }
 
+function preferSingleVNode(vnodes: VNode[]) {
+  return vnodes.length === 1 ? vnodes[0] : vnodes
+}
+
 export const RouterLinkImpl = /*#__PURE__*/ defineComponent({
   name: 'RouterLink',
   compatConfig: { MODE: 3 },
@@ -280,6 +304,7 @@ export const RouterLinkImpl = /*#__PURE__*/ defineComponent({
       type: String as PropType<RouterLinkProps['ariaCurrentValue']>,
       default: 'page',
     },
+    viewTransition: Boolean,
   },
 
   useLink,
@@ -307,7 +332,7 @@ export const RouterLinkImpl = /*#__PURE__*/ defineComponent({
     }))
 
     return () => {
-      const children = slots.default && slots.default(link)
+      const children = slots.default && preferSingleVNode(slots.default(link))
       return props.custom
         ? children
         : h(
@@ -336,17 +361,33 @@ export const RouterLinkImpl = /*#__PURE__*/ defineComponent({
 export const RouterLink: _RouterLinkI = RouterLinkImpl as any
 
 /**
+ * @internal
+ */
+type _RouterLinkPropsTypedBase = AllowedComponentProps &
+  ComponentCustomProps &
+  VNodeProps &
+  RouterLinkProps
+
+/**
+ * @internal
+ */
+type RouterLinkPropsTyped<Custom extends boolean | undefined> =
+  Custom extends true
+    ? _RouterLinkPropsTypedBase & { custom: true }
+    : _RouterLinkPropsTypedBase & { custom?: false | undefined } & Omit<
+          AnchorHTMLAttributes,
+          'href'
+        >
+
+/**
  * Typed version of the `RouterLink` component. Its generic defaults to the typed router, so it can be inferred
  * automatically for JSX.
  *
  * @internal
  */
 export interface _RouterLinkI {
-  new (): {
-    $props: AllowedComponentProps &
-      ComponentCustomProps &
-      VNodeProps &
-      RouterLinkProps
+  new <Custom extends boolean | undefined = boolean | undefined>(): {
+    $props: RouterLinkPropsTyped<Custom>
 
     $slots: {
       default?: ({
@@ -401,7 +442,9 @@ function includesParams(
       if (
         !isArray(outerValue) ||
         outerValue.length !== innerValue.length ||
-        innerValue.some((value, i) => value !== outerValue[i])
+        innerValue.some(
+          (value, i) => value.valueOf() !== outerValue[i].valueOf()
+        )
       )
         return false
     }
@@ -432,5 +475,5 @@ const getLinkClass = (
   propClass != null
     ? propClass
     : globalClass != null
-    ? globalClass
-    : defaultClass
+      ? globalClass
+      : defaultClass

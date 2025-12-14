@@ -61,8 +61,7 @@ It is possible to create complex layouts using named views with nested views. Wh
 
 The `<template>` section for `UserSettings` component in the above layout would look something like this:
 
-```vue-html
-<!-- UserSettings.vue -->
+```vue-html [UserSettings.vue]
 <div>
   <h1>User Settings</h1>
   <NavBar />
@@ -78,17 +77,22 @@ Then you can achieve the layout above with this route configuration:
   path: '/settings',
   // You could also have named views at the top
   component: UserSettings,
-  children: [{
-    path: 'emails',
-    component: UserEmailsSubscriptions
-  }, {
-    path: 'profile',
-    components: {
-      default: UserProfile,
-      helper: UserProfilePreview
+  children: [
+    {
+      path: 'emails',
+      component: UserEmailsSubscriptions
+    },
+    {
+      path: 'profile',
+      components: {
+        default: UserProfile,
+        helper: UserProfilePreview
+      }
     }
-  }]
+  ]
 }
 ```
 
 A working demo of this example can be found [here](https://codesandbox.io/s/nested-named-views-vue-router-4-examples-re9yl?&initialpath=%2Fsettings%2Femails).
+
+<RuleKitLink />

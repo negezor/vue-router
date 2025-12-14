@@ -7,23 +7,6 @@
 
 The `history` option when creating the router instance allows us to choose among different history modes.
 
-## Hash Mode
-
-The hash history mode is created with `createWebHashHistory()`:
-
-```js
-import { createRouter, createWebHashHistory } from 'vue-router'
-
-const router = createRouter({
-  history: createWebHashHistory(),
-  routes: [
-    //...
-  ],
-})
-```
-
-It uses a hash character (`#`) before the actual URL that is internally passed. Because this section of the URL is never sent to the server, it doesn't require any special treatment on the server level. **It does however have a bad impact in SEO**. If that's a concern for you, use the HTML5 history mode.
-
 ## HTML5 Mode
 
 The HTML5 mode is created with `createWebHistory()` and is the recommended mode:
@@ -44,6 +27,23 @@ When using `createWebHistory()`, the URL will look "normal," e.g. `https://examp
 Here comes a problem, though: Since our app is a single page client side app, without a proper server configuration, the users will get a 404 error if they access `https://example.com/user/id` directly in their browser. Now that's ugly.
 
 Not to worry: To fix the issue, all you need to do is add a simple catch-all fallback route to your server. If the URL doesn't match any static assets, it should serve the same `index.html` page that your app lives in. Beautiful, again!
+
+## Hash Mode
+
+The hash history mode is created with `createWebHashHistory()`:
+
+```js
+import { createRouter, createWebHashHistory } from 'vue-router'
+
+const router = createRouter({
+  history: createWebHashHistory(),
+  routes: [
+    //...
+  ],
+})
+```
+
+It uses a hash character (`#`) before the actual URL that is internally passed. Because this section of the URL is never sent to the server, it doesn't require any special treatment on the server level. **It does however have a bad impact in SEO**. If that's a concern for you, use the HTML5 history mode.
 
 ## Memory mode
 
@@ -128,7 +128,7 @@ For Node.js/Express, consider using [connect-history-api-fallback middleware](ht
 1. Install [IIS UrlRewrite](https://www.iis.net/downloads/microsoft/url-rewrite)
 2. Create a `web.config` file in the root directory of your site with the following:
 
-```xml
+```xml [web.config ~vscode-icons:file-type-xml~]
 <?xml version="1.0" encoding="UTF-8"?>
 <configuration>
   <system.webServer>
@@ -167,7 +167,7 @@ rewrite {
 
 Add this to your `firebase.json`:
 
-```json
+```json [firebase.json ~vscode-icons:file-type-firebase~]
 {
   "hosting": {
     "public": "dist",
@@ -185,7 +185,7 @@ Add this to your `firebase.json`:
 
 Create a `_redirects` file that is included with your deployed files:
 
-```
+``` [_redirects ~vscode-icons:file-type-light-netlify~]
 /* /index.html 200
 ```
 
@@ -197,11 +197,13 @@ You can read more about the syntax on [Netlify documentation](https://docs.netli
 
 Create a `vercel.json` file under the root directory of your project with the following:
 
-```json
+```json [vercel.json ~vscode-icons:file-type-light-vercel~]
 {
   "rewrites": [{ "source": "/:path*", "destination": "/index.html" }]
 }
 ```
+
+<RuleKitLink />
 
 ## Caveat
 

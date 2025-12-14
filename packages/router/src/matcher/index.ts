@@ -9,14 +9,15 @@ import { createMatcherTree } from './matcherTree'
 import { createRouteRecordMatcher, RouteRecordMatcher } from './pathMatcher'
 import { RouteRecordNormalized } from './types'
 
-import type {
-  PathParams,
-  PathParserOptions,
-  _PathParserOptions,
+import {
+  PATH_PARSER_OPTIONS_DEFAULTS,
+  type PathParams,
+  type PathParserOptions,
+  type _PathParserOptions,
 } from './pathParserRanker'
 
 import { warn } from '../warning'
-import { assign, noop } from '../utils'
+import { assign, mergeOptions, noop } from '../utils'
 import type { RouteRecordName, _RouteRecordProps } from '../typed-routes'
 
 /**
@@ -60,10 +61,7 @@ export function createRouterMatcher(
   // normalized ordered tree of matchers
   const matcherTree = createMatcherTree()
   const matcherMap = new Map<RouteRecordName, RouteRecordMatcher>()
-  globalOptions = mergeOptions(
-    { strict: false, end: true, sensitive: false } as PathParserOptions,
-    globalOptions
-  )
+  globalOptions = mergeOptions(PATH_PARSER_OPTIONS_DEFAULTS, globalOptions)
 
   function getRecordMatcher(name: RouteRecordName) {
     return matcherMap.get(name)
@@ -84,28 +82,30 @@ export function createRouterMatcher(
     mainNormalizedRecord.aliasOf = originalRecord && originalRecord.record
     const options: PathParserOptions = mergeOptions(globalOptions, record)
     // generate an array of records to correctly handle aliases
-    const normalizedRecords: (typeof mainNormalizedRecord)[] = [
-      mainNormalizedRecord,
-    ]
+    const normalizedRecords: RouteRecordNormalized[] = [mainNormalizedRecord]
     if ('alias' in record) {
       const aliases =
         typeof record.alias === 'string' ? [record.alias] : record.alias!
       for (const alias of aliases) {
         normalizedRecords.push(
-          assign({}, mainNormalizedRecord, {
-            // this allows us to hold a copy of the `components` option
-            // so that async components cache is hold on the original record
-            components: originalRecord
-              ? originalRecord.record.components
-              : mainNormalizedRecord.components,
-            path: alias,
-            // we might be the child of an alias
-            aliasOf: originalRecord
-              ? originalRecord.record
-              : mainNormalizedRecord,
-            // the aliases are always of the same kind as the original since they
-            // are defined on the same record
-          }) as typeof mainNormalizedRecord
+          // we need to normalize again to ensure the `mods` property
+          // being non enumerable
+          normalizeRouteRecord(
+            assign({}, mainNormalizedRecord, {
+              // this allows us to hold a copy of the `components` option
+              // so that async components cache is hold on the original record
+              components: originalRecord
+                ? originalRecord.record.components
+                : mainNormalizedRecord.components,
+              path: alias,
+              // we might be the child of an alias
+              aliasOf: originalRecord
+                ? originalRecord.record
+                : mainNormalizedRecord,
+              // the aliases are always of the same kind as the original since they
+              // are defined on the same record
+            })
+          )
         )
       }
     }
@@ -153,8 +153,12 @@ export function createRouterMatcher(
 
         // remove the route if named and only for the top record (avoid in nested calls)
         // this works because the original record is the first one
-        if (isRootAdd && record.name && !isAliasRecord(matcher))
+        if (isRootAdd && record.name && !isAliasRecord(matcher)) {
+          if (__DEV__) {
+            checkSameNameAsAncestor(record, parent)
+          }
           removeRoute(record.name)
+        }
       }
 
       if (mainNormalizedRecord.children) {
@@ -206,7 +210,7 @@ export function createRouterMatcher(
         matcher.children.forEach(removeRoute)
         matcher.alias.forEach(removeRoute)
       }
-    } else {
+    } else if (matcherRef) {
       matcherTree.remove(matcherRef)
       if (matcherRef.record.name) matcherMap.delete(matcherRef.record.name)
       matcherRef.children.forEach(removeRoute)
@@ -260,7 +264,7 @@ export function createRouterMatcher(
       name = matcher.record.name
       params = assign(
         // paramsFromLocation is a new object
-        paramsFromLocation(
+        pickParams(
           currentLocation.params,
           // only keep params that exist in the resolved location
           // only keep optional params coming from a parent record
@@ -274,7 +278,7 @@ export function createRouterMatcher(
         // discard any existing params in the current location that do not exist here
         // #1497 this ensures better active/exact matching
         location.params &&
-          paramsFromLocation(
+          pickParams(
             location.params,
             matcher.keys.map(k => k.name)
           )
@@ -353,7 +357,13 @@ export function createRouterMatcher(
   }
 }
 
-function paramsFromLocation(
+/**
+ * Picks an object param to contain only specified keys.
+ *
+ * @param params - params object to pick from
+ * @param keys - keys to pick
+ */
+function pickParams(
   params: MatcherLocation['params'],
   keys: string[]
 ): MatcherLocation['params'] {
@@ -373,14 +383,14 @@ function paramsFromLocation(
  * @returns the normalized version
  */
 export function normalizeRouteRecord(
-  record: RouteRecordRaw
+  record: RouteRecordRaw & { aliasOf?: RouteRecordNormalized }
 ): RouteRecordNormalized {
-  return {
+  const normalized: Omit<RouteRecordNormalized, 'mods'> = {
     path: record.path,
     redirect: record.redirect,
     name: record.name,
     meta: record.meta || {},
-    aliasOf: undefined,
+    aliasOf: record.aliasOf,
     beforeEnter: record.beforeEnter,
     props: normalizeRecordProps(record),
     children: record.children || [],
@@ -388,11 +398,22 @@ export function normalizeRouteRecord(
     leaveGuards: new Set(),
     updateGuards: new Set(),
     enterCallbacks: {},
+    // must be declared afterwards
+    // mods: {},
     components:
       'components' in record
         ? record.components || null
         : record.component && { default: record.component },
   }
+
+  // mods contain modules and shouldn't be copied,
+  // logged or anything. It's just used for internal
+  // advanced use cases like data loaders
+  Object.defineProperty(normalized, 'mods', {
+    value: {},
+  })
+
+  return normalized as RouteRecordNormalized
 }
 
 /**
@@ -400,7 +421,7 @@ export function normalizeRouteRecord(
  * components. Also accept a boolean for components.
  * @param record
  */
-function normalizeRecordProps(
+export function normalizeRecordProps(
   record: RouteRecordRaw
 ): Record<string, _RouteRecordProps> {
   const propsObject = {} as Record<string, _RouteRecordProps>
@@ -443,18 +464,6 @@ function mergeMetaFields(matched: MatcherLocation['matched']) {
   )
 }
 
-function mergeOptions<T extends object>(
-  defaults: T,
-  partialOptions: Partial<T>
-): T {
-  const options = {} as T
-  for (const key in defaults) {
-    options[key] = key in partialOptions ? partialOptions[key]! : defaults[key]
-  }
-
-  return options
-}
-
 type ParamKey = RouteRecordMatcher['keys'][number]
 
 function isSameParam(a: ParamKey, b: ParamKey): boolean {
@@ -492,7 +501,7 @@ function checkSameParams(a: RouteRecordMatcher, b: RouteRecordMatcher) {
  * @param mainNormalizedRecord - RouteRecordNormalized
  * @param parent - RouteRecordMatcher
  */
-function checkChildMissingNameWithEmptyPath(
+export function checkChildMissingNameWithEmptyPath(
   mainNormalizedRecord: RouteRecordNormalized,
   parent?: RouteRecordMatcher
 ) {
@@ -507,6 +516,21 @@ function checkChildMissingNameWithEmptyPath(
         parent.record.name
       )}" has a child without a name and an empty path. Using that name won't render the empty path child so you probably want to move the name to the child instead. If this is intentional, add a name to the child route to remove the warning.`
     )
+  }
+}
+
+function checkSameNameAsAncestor(
+  record: RouteRecordRaw,
+  parent?: RouteRecordMatcher
+) {
+  for (let ancestor = parent; ancestor; ancestor = ancestor.parent) {
+    if (ancestor.record.name === record.name) {
+      throw new Error(
+        `A route named "${String(record.name)}" has been added as a ${
+          parent === ancestor ? 'child' : 'descendant'
+        } of a route with the same name. Route names must be unique and a nested route cannot use the same name as an ancestor.`
+      )
+    }
   }
 }
 

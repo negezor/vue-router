@@ -40,8 +40,8 @@ const ErrorLazyLoad: RouteRecordRaw = {
 
 beforeEach(() => {
   beforeRouteEnter.mockReset()
-  beforeRouteEnter.mockImplementation((to, from, next) => {
-    next()
+  beforeRouteEnter.mockImplementation((to, from) => {
+    return
   })
 })
 
@@ -103,5 +103,31 @@ describe('extractComponentsGuards', () => {
       'message',
       'custom'
     )
+  })
+
+  it('preserves resolved modules in mods', async () => {
+    const mod = {
+      default: components.Home,
+      __esModule: true,
+      custom: true,
+    }
+    const mod2 = {
+      default: components.Bar,
+      __esModule: true,
+      custom: true,
+    }
+    const record = normalizeRouteRecord({
+      path: '/',
+      components: { default: async () => mod, other: async () => mod2 },
+    })
+    expect(record.mods).toEqual({})
+    const guards = extractComponentsGuards(
+      [record],
+      'beforeRouteEnter',
+      to,
+      from
+    )
+    await Promise.all(guards.map(guard => guard()))
+    expect(record.mods).toEqual({ default: mod, other: mod2 })
   })
 })
